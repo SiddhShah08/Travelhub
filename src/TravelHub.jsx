@@ -407,10 +407,13 @@ const TOURS = [
   },
 ];
 
+// NOTE: data getters are re-bound inside App() using stateful arrays.
+// These placeholders exist only to avoid reference errors during initial render.
 const getDestination = (id) => DESTINATIONS.find((d) => d.id === id);
 const getPropertiesByDestination = (destId) => PROPERTIES.filter((p) => p.destinationId === destId);
 const getProperty = (id) => PROPERTIES.find((p) => p.id === id);
 const getTour = (id) => TOURS.find((t) => t.id === id);
+
 
 /* ============================================================
    IMAGE HELPER — Unsplash primary, keyword fallback, then a
@@ -1846,14 +1849,23 @@ function AdminTable({ columns, rows, onEdit, onDelete, theme, dark }) {
   );
 }
 
-function AdminFormModal({ open, onClose, title, fields, dark, theme }) {
-  const [vals, setVals] = useState({});
+function AdminFormModal({ open, onClose, title, fields, dark, theme, mode, onSave, initialValues }) {
+  const [vals, setVals] = useState(initialValues || {});
+
+  useEffect(() => {
+    if (open) setVals(initialValues || {});
+  }, [open, initialValues]);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm" onClick={onClose} />
       <div className={cx("relative w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl border p-7 max-h-[88vh] overflow-y-auto th-scrollbar", theme.border, theme.surface)}>
-        <button onClick={onClose} className={cx("absolute top-5 right-5 w-9 h-9 rounded-full inline-flex items-center justify-center", dark ? "hover:bg-stone-800" : "hover:bg-stone-100")}>
+        <button
+          onClick={onClose}
+          className={cx("absolute top-5 right-5 w-9 h-9 rounded-full inline-flex items-center justify-center", dark ? "hover:bg-stone-800" : "hover:bg-stone-100")}
+          aria-label="Close"
+        >
           <X className="w-4 h-4" />
         </button>
         <h2 className="th-display text-2xl mb-6">{title}</h2>
@@ -1863,7 +1875,8 @@ function AdminFormModal({ open, onClose, title, fields, dark, theme }) {
               <label className="text-xs font-semibold block mb-1.5">{label}</label>
               {type === "textarea" ? (
                 <textarea
-                  rows={3} placeholder={placeholder}
+                  rows={3}
+                  placeholder={placeholder}
                   value={vals[name] || ""}
                   onChange={(e) => setVals((v) => ({ ...v, [name]: e.target.value }))}
                   className={cx("w-full rounded-xl border px-4 py-2.5 text-sm outline-none focus:border-amber-500 resize-none", theme.border, theme.inputBg)}
@@ -1876,7 +1889,8 @@ function AdminFormModal({ open, onClose, title, fields, dark, theme }) {
                 </label>
               ) : (
                 <input
-                  type={type} placeholder={placeholder}
+                  type={type}
+                  placeholder={placeholder}
                   value={vals[name] || ""}
                   onChange={(e) => setVals((v) => ({ ...v, [name]: e.target.value }))}
                   className={cx("w-full rounded-xl border px-4 py-2.5 text-sm outline-none focus:border-amber-500", theme.border, theme.inputBg)}
@@ -1886,14 +1900,25 @@ function AdminFormModal({ open, onClose, title, fields, dark, theme }) {
           ))}
         </div>
         <div className="flex gap-3 mt-6">
-          <PrimaryButton className="flex-1" icon={Check} onClick={onClose}>Save</PrimaryButton>
-          <SecondaryButton dark={dark} className="flex-1" onClick={onClose} icon={X}>Cancel</SecondaryButton>
+          <PrimaryButton
+            className="flex-1"
+            icon={Check}
+            onClick={() => onSave?.(vals)}
+          >
+            Save
+          </PrimaryButton>
+          <SecondaryButton dark={dark} className="flex-1" onClick={onClose} icon={X}>
+            Cancel
+          </SecondaryButton>
         </div>
-        <p className={cx("text-[11px] text-center mt-3", theme.textFaint)}>This is a UI demo — no data is saved to a backend.</p>
+        <p className={cx("text-[11px] text-center mt-3", theme.textFaint)}>
+          This is a UI demo — data is stored in localStorage.
+        </p>
       </div>
     </div>
   );
 }
+
 
 function AdminDashboard({ theme, dark }) {
   return (
@@ -1948,93 +1973,223 @@ function AdminDashboard({ theme, dark }) {
   );
 }
 
-function AdminDestinations({ theme, dark }) {
-  const [modal, setModal] = useState(false);
+function AdminDestinations({ theme, dark, nav }) {
+  const am = nav.adminModal;
+  const isDestModal = am?.open && am?.entity === "destinations";
+  const isEdit = am?.mode === "edit";
+  const editingDest = isEdit ? nav.destinations.find((d) => d.id === am.entityId) : null;
+
+  const getInitialValues = () => {
+    if (!editingDest) return null;
+    return {
+      name: editingDest.name,
+      country: editingDest.country,
+      blurb: editingDest.blurb,
+      tag: editingDest.tag,
+      img: editingDest.img,
+    };
+  };
+
+  const handleSave = (values) => {
+    if (isEdit) {
+      nav.saveAdminModal("destinations", "edit", am.entityId, values);
+    } else {
+      nav.saveAdminModal("destinations", "create", null, values);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className={cx("text-sm", theme.textMuted)}>{DESTINATIONS.length} destinations total</p>
-        <PrimaryButton icon={Plus} onClick={() => setModal(true)}>Add Destination</PrimaryButton>
+        <p className={cx("text-sm", theme.textMuted)}>{nav.destinations.length} destinations total</p>
+        <PrimaryButton icon={Plus} onClick={() => nav.openAdminCreate("destinations")}>Add Destination</PrimaryButton>
       </div>
       <AdminTable
         columns={["Name", "Country", "Tag"]}
-        rows={DESTINATIONS.map((d) => [
+        rows={nav.destinations.map((d) => [
           <span className="font-semibold">{d.name}</span>,
           d.country,
           <span className="rounded-full bg-teal-500/15 text-teal-600 text-xs font-bold px-2.5 py-1">{d.tag}</span>,
         ])}
+        onEdit={(rowIndex) => nav.openAdminEdit("destinations", nav.destinations[rowIndex]?.id)}
+        onDelete={(rowIndex) => nav.saveAdminModal("destinations", "delete", nav.destinations[rowIndex]?.id)}
         theme={theme} dark={dark}
       />
       <AdminFormModal
-        open={modal} onClose={() => setModal(false)} title="Add Destination" dark={dark} theme={theme}
+        open={isDestModal}
+        onClose={() => nav.closeAdminModal()}
+        title={isEdit ? "Edit Destination" : "Add Destination"}
+        dark={dark}
+        theme={theme}
+        mode={isEdit ? "edit" : "create"}
+        initialValues={getInitialValues()}
         fields={[
-          { name: "name", label: "Destination name", placeholder: "e.g. Amalfi Coast" },
-          { name: "country", label: "Country", placeholder: "e.g. Italy" },
-          { name: "tag", label: "Tag", placeholder: "e.g. Coastal" },
-          { name: "blurb", label: "Tagline", type: "textarea", placeholder: "Short evocative description..." },
-          { name: "image", label: "Cover image", type: "file" },
+          { name: "name", label: "Destination name", placeholder: "e.g. Bali" },
+          { name: "country", label: "Country", placeholder: "e.g. Indonesia" },
+          { name: "blurb", label: "Short description", type: "textarea", placeholder: "One sentence..." },
+          { name: "tag", label: "Tag", placeholder: "e.g. Tropical" },
+          { name: "img", label: "Image ID", placeholder: "Unsplash photo ID" },
         ]}
+        onSave={handleSave}
       />
     </div>
   );
 }
 
-function AdminProperties({ theme, dark }) {
-  const [modal, setModal] = useState(false);
+
+
+function AdminProperties({ theme, dark, nav }) {
+  const am = nav.adminModal;
+  const isPropModal = am?.open && am?.entity === "properties";
+  const isEdit = am?.mode === "edit";
+  const editingProp = isEdit ? nav.properties.find((p) => p.id === am.entityId) : null;
+
+  const getInitialValues = () => {
+    if (!editingProp) return null;
+    return {
+      name: editingProp.name,
+      type: editingProp.type,
+      destinationName: nav.destinations.find((d) => d.id === editingProp.destinationId)?.name || "",
+      location: editingProp.location,
+      desc: editingProp.shortDesc,
+      longdesc: editingProp.longDesc,
+      amenities: editingProp.amenities.join(", "),
+      price: editingProp.priceFrom,
+      rating: editingProp.rating,
+      reviews: editingProp.reviews,
+    };
+  };
+
+  const handleSave = (values) => {
+    const destName = values.destinationName || values.destination;
+    if (isEdit) {
+      nav.saveAdminModal("properties", "edit", am.entityId, { ...values, destinationName: destName, priceFrom: values.price, price: undefined });
+    } else {
+      nav.saveAdminModal("properties", "create", null, { ...values, destinationName: destName, priceFrom: values.price, price: undefined });
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className={cx("text-sm", theme.textMuted)}>{PROPERTIES.length} properties — {PROPERTIES.filter((p) => p.type === "Hotel").length} hotels, {PROPERTIES.filter((p) => p.type === "Villa").length} villas</p>
-        <PrimaryButton icon={Plus} onClick={() => setModal(true)}>Add Property</PrimaryButton>
+        <p className={cx("text-sm", theme.textMuted)}>
+          {nav.properties.length} properties — {nav.properties.filter((p) => p.type === "Hotel").length} hotels, {nav.properties.filter((p) => p.type === "Villa").length} villas
+        </p>
+        <PrimaryButton icon={Plus} onClick={() => { nav.openAdminCreate("properties"); }}>
+          Add Property
+        </PrimaryButton>
       </div>
+
       <AdminTable
         columns={["Property", "Destination", "Type", "Rating"]}
-        rows={PROPERTIES.map((p) => [
+        rows={nav.properties.map((p) => [
           <span className="font-semibold">{p.name}</span>,
-          DESTINATIONS.find((d) => d.id === p.destinationId)?.name || "—",
-          <span className={cx("rounded-full text-xs font-bold px-2.5 py-1", p.type === "Villa" ? "bg-teal-500/15 text-teal-600" : "bg-amber-500/15 text-amber-600")}>{p.type}</span>,
+          nav.destinations.find((d) => d.id === p.destinationId)?.name || "—",
+          <span
+            className={cx(
+              "rounded-full text-xs font-bold px-2.5 py-1",
+              p.type === "Villa" ? "bg-teal-500/15 text-teal-600" : "bg-amber-500/15 text-amber-600"
+            )}
+          >
+            {p.type}
+          </span>,
           <RatingStars rating={p.rating} />,
         ])}
-        theme={theme} dark={dark}
+        onEdit={(rowIndex) => nav.openAdminEdit("properties", nav.properties[rowIndex]?.id)}
+        onDelete={(rowIndex) => nav.saveAdminModal("properties", "delete", nav.properties[rowIndex]?.id)}
+        theme={theme}
+        dark={dark}
       />
+
       <AdminFormModal
-        open={modal} onClose={() => setModal(false)} title="Add Hotel / Villa" dark={dark} theme={theme}
+        open={isPropModal}
+        onClose={() => nav.closeAdminModal()}
+        title={isEdit ? "Edit Hotel / Villa" : "Add Hotel / Villa"}
+        dark={dark}
+        theme={theme}
+        mode={isEdit ? "edit" : "create"}
+        initialValues={getInitialValues()}
         fields={[
           { name: "name", label: "Property name", placeholder: "e.g. Cliffside Garden Villa" },
           { name: "type", label: "Type (Hotel / Villa)", placeholder: "Hotel" },
-          { name: "destination", label: "Destination", placeholder: "e.g. Bali" },
+          { name: "destinationName", label: "Destination (type name)", placeholder: "e.g. Bali" },
           { name: "location", label: "Location detail", placeholder: "e.g. Seminyak, Bali" },
           { name: "desc", label: "Short description", type: "textarea", placeholder: "One sentence overview..." },
           { name: "longdesc", label: "Full description", type: "textarea", placeholder: "Detailed description..." },
           { name: "amenities", label: "Amenities (comma-separated)", placeholder: "wifi, pool, breakfast..." },
           { name: "price", label: "Nightly price from (USD)", type: "number", placeholder: "420" },
-          { name: "images", label: "Property images", type: "file" },
+          { name: "rating", label: "Rating", type: "number", placeholder: "4.8" },
+          { name: "reviews", label: "Reviews", type: "number", placeholder: "200" },
         ]}
+        onSave={handleSave}
       />
     </div>
   );
 }
 
-function AdminTours({ theme, dark }) {
-  const [modal, setModal] = useState(false);
+
+function AdminTours({ theme, dark, nav }) {
+  const am = nav.adminModal;
+  const isTourModal = am?.open && am?.entity === "tours";
+  const isEdit = am?.mode === "edit";
+  const editingTour = isEdit ? nav.tours.find((t) => t.id === am.entityId) : null;
+
+  const getInitialValues = () => {
+    if (!editingTour) return null;
+    return {
+      name: editingTour.name,
+      duration: editingTour.duration,
+      destinations: editingTour.destinations.join(", "),
+      shortdesc: editingTour.shortDesc,
+      longdesc: editingTour.longDesc,
+      highlights: editingTour.highlights.join("\n"),
+      included: editingTour.included.join("\n"),
+      excluded: editingTour.excluded.join("\n"),
+      price: editingTour.priceFrom,
+    };
+  };
+
+  const handleSave = (values) => {
+    if (isEdit) {
+      nav.saveAdminModal("tours", "edit", am.entityId, values);
+    } else {
+      nav.saveAdminModal("tours", "create", null, values);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className={cx("text-sm", theme.textMuted)}>{TOURS.length} tour packages</p>
-        <PrimaryButton icon={Plus} onClick={() => setModal(true)}>Add Tour Package</PrimaryButton>
+        <p className={cx("text-sm", theme.textMuted)}>{nav.tours.length} tour packages</p>
+        <PrimaryButton
+          icon={Plus}
+          onClick={() => {
+            nav.openAdminCreate("tours");
+          }}
+        >
+          Add Tour Package
+        </PrimaryButton>
       </div>
+
       <AdminTable
         columns={["Tour name", "Duration", "Destinations", "Price from"]}
-        rows={TOURS.map((t) => [
+        rows={nav.tours.map((t) => [
           <span className="font-semibold">{t.name}</span>,
           t.duration,
           t.destinations.join(", "),
           `$${t.priceFrom.toLocaleString()}`,
         ])}
+        onEdit={(rowIndex) => nav.openAdminEdit("tours", nav.tours[rowIndex]?.id)}
+        onDelete={(rowIndex) => nav.saveAdminModal("tours", "delete", nav.tours[rowIndex]?.id)}
         theme={theme} dark={dark}
       />
+
       <AdminFormModal
-        open={modal} onClose={() => setModal(false)} title="Add Tour Package" dark={dark} theme={theme}
+        open={isTourModal} onClose={() => nav.closeAdminModal()}
+        title={isEdit ? "Edit Tour Package" : "Add Tour Package"}
+        dark={dark} theme={theme}
+        mode={isEdit ? "edit" : "create"}
+        initialValues={getInitialValues()}
         fields={[
           { name: "name", label: "Tour name", placeholder: "e.g. Aegean Island Hopper" },
           { name: "duration", label: "Duration", placeholder: "e.g. 7 Days / 6 Nights" },
@@ -2045,8 +2200,8 @@ function AdminTours({ theme, dark }) {
           { name: "included", label: "Included (one per line)", type: "textarea", placeholder: "Daily breakfast\nAirport transfers..." },
           { name: "excluded", label: "Not included (one per line)", type: "textarea", placeholder: "International flights\nTravel insurance..." },
           { name: "price", label: "Price per person from (USD)", type: "number", placeholder: "1490" },
-          { name: "images", label: "Tour images", type: "file" },
         ]}
+        onSave={handleSave}
       />
     </div>
   );
@@ -2178,10 +2333,10 @@ function AdminPanel({ nav, dark, setDark, theme, enquiries }) {
       <div className="flex-1 flex flex-col min-h-screen min-w-0">
         <AdminHeader section={section} dark={dark} theme={theme} nav={nav} />
         <main className={cx("flex-1 p-6 sm:p-8 overflow-y-auto th-scrollbar", dark ? "bg-stone-950" : "bg-stone-50")}>
-          {section === "dashboard" && <AdminDashboard theme={theme} dark={dark} />}
-          {section === "destinations" && <AdminDestinations theme={theme} dark={dark} />}
-          {section === "properties" && <AdminProperties theme={theme} dark={dark} />}
-          {section === "tours" && <AdminTours theme={theme} dark={dark} />}
+          {section === "dashboard" && <AdminDashboard theme={theme} dark={dark} nav={nav} />}
+          {section === "destinations" && <AdminDestinations theme={theme} dark={dark} nav={nav} />}
+          {section === "properties" && <AdminProperties theme={theme} dark={dark} nav={nav} />}
+          {section === "tours" && <AdminTours theme={theme} dark={dark} nav={nav} />}
           {section === "enquiries" && <AdminEnquiries theme={theme} dark={dark} enquiries={enquiries} />}
 
 
@@ -2197,11 +2352,59 @@ function AdminPanel({ nav, dark, setDark, theme, enquiries }) {
 
 export default function App() {
   const [dark, setDark] = useState(false);
+
+  // ==========================
+  // Admin state + persistence
+  // ==========================
+  const loadLs = (key, fallback) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const [destinations, setDestinations] = useState(() => loadLs("travel-hub:destinations", DESTINATIONS));
+  const [properties, setProperties] = useState(() => loadLs("travel-hub:properties", PROPERTIES));
+  const [tours, setTours] = useState(() => loadLs("travel-hub:tours", TOURS));
+
+  useEffect(() => {
+    try { localStorage.setItem("travel-hub:destinations", JSON.stringify(destinations)); } catch {}
+  }, [destinations]);
+
+  useEffect(() => {
+    try { localStorage.setItem("travel-hub:properties", JSON.stringify(properties)); } catch {}
+  }, [properties]);
+
+  useEffect(() => {
+    try { localStorage.setItem("travel-hub:tours", JSON.stringify(tours)); } catch {}
+  }, [tours]);
+
+  // Data getters re-bound to state
+  const getDestinationByState = (id) => destinations.find((d) => d.id === id);
+  const getPropertiesByDestinationByState = (destId) => properties.filter((p) => p.destinationId === destId);
+  const getPropertyByState = (id) => properties.find((p) => p.id === id);
+  const getTourByState = (id) => tours.find((t) => t.id === id);
+
   const [view, setView] = useState("home");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [selectedDestinationId, setSelectedDestinationId] = useState(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState(null);
   const [selectedTourId, setSelectedTourId] = useState(null);
+
+  // CRUD modal state
+  const [adminModal, setAdminModal] = useState({
+    open: false,
+    mode: "create", // create | edit
+    entity: null, // destinations | properties | tours
+    entityId: null,
+  });
+
+  const [adminFormKey, setAdminFormKey] = useState(0);
+
   const [inquiry, setInquiry] = useState({ open: false, type: null, item: null });
 
   const [enquiries, setEnquiries] = useState(() => {
@@ -2263,7 +2466,162 @@ export default function App() {
       else setView("home");
     },
     selectedDestinationId, selectedPropertyId, selectedTourId,
+    destinations,
+    properties,
+    tours,
+    getDestinationById: getDestinationByState,
+    getPropertiesByDestinationId: getPropertiesByDestinationByState,
+    getPropertyById: getPropertyByState,
+    getTourById: getTourByState,
+    openAdminCreate: (entity) => setAdminModal({ open: true, mode: "create", entity, entityId: null }),
+    openAdminEdit: (entity, entityId) => setAdminModal({ open: true, mode: "edit", entity, entityId }),
+    closeAdminModal: () => setAdminModal((s) => ({ ...s, open: false })),
+    adminModal,
+    saveAdminModal: (entity, mode, entityId, values) => {
+      const normalize = (s) => (typeof s === "string" ? s.trim() : s);
+
+      if (entity === "destinations") {
+        if (mode === "delete") {
+          setDestinations((prev) => prev.filter((d) => d.id !== entityId));
+        } else if (mode === "create") {
+          const newItem = {
+            id: values?.id || `${Date.now()}`,
+            name: normalize(values?.name) || "Untitled Destination",
+            country: normalize(values?.country) || "",
+            blurb: normalize(values?.blurb) || "",
+            img: normalize(values?.img) || "",
+            tag: normalize(values?.tag) || "",
+          };
+          setDestinations((prev) => [newItem, ...prev]);
+        } else {
+          setDestinations((prev) =>
+            prev.map((d) =>
+              d.id === entityId
+                ? {
+                    ...d,
+                    ...values,
+                    name: normalize(values?.name) || d.name,
+                    country: normalize(values?.country) || d.country,
+                    blurb: normalize(values?.blurb) || d.blurb,
+                    tag: normalize(values?.tag) || d.tag,
+                    img: normalize(values?.img) || d.img,
+                  }
+                : d
+            )
+          );
+        }
+      }
+
+
+      if (entity === "properties") {
+        if (mode === "delete") {
+          setProperties((prev) => prev.filter((p) => p.id !== entityId));
+        } else if (mode === "create") {
+          const destName = normalize(values.destinationName);
+          const dest = destinations.find((d) => d.name === destName);
+          const newItem = {
+            id: values.id || `${Date.now()}`,
+            destinationId: dest?.id || destinations[0]?.id || "",
+            type: values.type || "Hotel",
+            name: normalize(values.name) || "Untitled Property",
+            location: normalize(values.location) || "",
+            shortDesc: normalize(values.desc) || "",
+            longDesc: normalize(values.longdesc) || "",
+            images: Array.isArray(values.images) && values.images.length ? values.images : values.image ? [values.image] : (values.imgs ? values.imgs : []),
+            amenities: typeof values.amenities === "string" && values.amenities.trim() ? values.amenities.split(",").map((x) => x.trim()).filter(Boolean) : [],
+            rating: Number(values.rating ?? 4.5) || 4.5,
+            reviews: Number(values.reviews ?? 0) || 0,
+            priceFrom: Number(values.priceFrom ?? values.price) || 0,
+            rooms: Array.isArray(values.rooms) && values.rooms.length ? values.rooms : [],
+            highlights: Array.isArray(values.highlights) && values.highlights.length ? values.highlights : [],
+          };
+          setProperties((prev) => [newItem, ...prev]);
+        } else if (mode === "edit") {
+          const destName = normalize(values.destinationName || values.destination);
+          const dest = destinations.find((d) => d.name === destName);
+          setProperties((prev) =>
+            prev.map((p) =>
+              p.id === entityId
+                ? {
+                    ...p,
+                    name: normalize(values.name) || p.name,
+                    type: values.type || p.type,
+                    location: normalize(values.location) || p.location,
+                    shortDesc: normalize(values.desc) || p.shortDesc,
+                    longDesc: normalize(values.longdesc) || p.longDesc,
+                    amenities: typeof values.amenities === "string" && values.amenities.trim()
+                      ? values.amenities.split(",").map((x) => x.trim()).filter(Boolean)
+                      : p.amenities,
+                    rating: Number(values.rating ?? p.rating) || p.rating,
+                    reviews: Number(values.reviews ?? p.reviews) || p.reviews,
+                    priceFrom: Number(values.priceFrom ?? values.price ?? p.priceFrom) || p.priceFrom,
+                    destinationId: dest?.id || p.destinationId,
+                  }
+                : p
+            )
+          );
+        }
+      }
+
+      if (entity === "tours") {
+        if (mode === "delete") {
+          setTours((prev) => prev.filter((t) => t.id !== entityId));
+        } else if (mode === "create") {
+          const newItem = {
+            id: values.id || `${Date.now()}`,
+            name: normalize(values.name) || "Untitled Tour",
+            duration: normalize(values.duration) || "",
+            img: normalize(values.img) || values.image || "",
+            gallery: Array.isArray(values.gallery) && values.gallery.length ? values.gallery : values.img ? [values.img] : [],
+            destinations: typeof values.destinations === "string" ? values.destinations.split(",").map((x) => x.trim()).filter(Boolean) : (values.destinationList || []),
+            shortDesc: normalize(values.shortdesc) || normalize(values.shortDesc) || "",
+            longDesc: normalize(values.longdesc) || normalize(values.longdescFull) || "",
+            highlights: typeof values.highlights === "string" ? values.highlights.split("\n").map((x) => x.trim()).filter(Boolean) : [],
+            rating: Number(values.rating ?? 4.8) || 4.8,
+            reviews: Number(values.reviews ?? 0) || 0,
+            priceFrom: Number(values.priceFrom ?? values.price) || 0,
+            itinerary: Array.isArray(values.itinerary) ? values.itinerary : [],
+            included: typeof values.included === "string" ? values.included.split("\n").map((x) => x.trim()).filter(Boolean) : [],
+            excluded: typeof values.excluded === "string" ? values.excluded.split("\n").map((x) => x.trim()).filter(Boolean) : [],
+          };
+          setTours((prev) => [newItem, ...prev]);
+        } else if (mode === "edit") {
+          setTours((prev) =>
+            prev.map((t) =>
+              t.id === entityId
+                ? {
+                    ...t,
+                    name: normalize(values.name) || t.name,
+                    duration: normalize(values.duration) || t.duration,
+                    destinations: typeof values.destinations === "string"
+                      ? values.destinations.split(",").map((x) => x.trim()).filter(Boolean)
+                      : t.destinations,
+                    shortDesc: normalize(values.shortdesc) || normalize(values.shortDesc) || t.shortDesc,
+                    longDesc: normalize(values.longdesc) || normalize(values.longdescFull) || t.longDesc,
+                    highlights: typeof values.highlights === "string"
+                      ? values.highlights.split("\n").map((x) => x.trim()).filter(Boolean)
+                      : t.highlights,
+                    rating: Number(values.rating ?? t.rating) || t.rating,
+                    reviews: Number(values.reviews ?? t.reviews) || t.reviews,
+                    priceFrom: Number(values.priceFrom ?? values.price ?? t.priceFrom) || t.priceFrom,
+                    included: typeof values.included === "string"
+                      ? values.included.split("\n").map((x) => x.trim()).filter(Boolean)
+                      : t.included,
+                    excluded: typeof values.excluded === "string"
+                      ? values.excluded.split("\n").map((x) => x.trim()).filter(Boolean)
+                      : t.excluded,
+                  }
+                : t
+            )
+          );
+        }
+      }
+
+      setAdminModal((s) => ({ ...s, open: false }));
+      setAdminFormKey((k) => k + 1);
+    },
   };
+
 
   if (view === "admin") return <AdminPanel nav={nav} dark={dark} setDark={setDark} theme={theme} enquiries={enquiries} />;
 

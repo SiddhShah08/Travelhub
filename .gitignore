@@ -30,3 +30,12 @@ pnpm-debug.log*
 *.sln
 *.sw?
 
+# AI / agents
+.agents/
+
+# generated lock files
+skills-lock.json
+
+# stale directories
+travel-hub/
+

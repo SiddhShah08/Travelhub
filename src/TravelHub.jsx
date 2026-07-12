@@ -423,8 +423,20 @@ function unsplashUrl(id, w, h) {
   return `https://images.unsplash.com/photo-${id}?w=${w}&h=${h}&q=80&fit=crop&auto=format`;
 }
 
-function SmartImage({ photoId, fallbackQuery, w = 800, h = 600, alt = "", className = "", imgClassName = "", eager = false }) {
+function SmartImage({ photoId, fallbackQuery, w = 800, h = 600, alt = "", className = "", imgClassName = "", eager = false, src: directSrc }) {
   const [stage, setStage] = useState(0);
+
+  if (directSrc) {
+    return (
+      <img
+        src={directSrc}
+        alt={alt}
+        loading={eager ? "eager" : "lazy"}
+        className={cx(className, imgClassName)}
+      />
+    );
+  }
+
   const sources = [
     unsplashUrl(photoId, w, h),
     `https://loremflickr.com/${w}/${h}/${encodeURIComponent(fallbackQuery || "travel,luxury")}`,
@@ -675,7 +687,7 @@ function Footer({ theme, dark, nav }) {
    HOME VIEW
    ============================================================ */
 function HomeView({ theme, dark, nav }) {
-  const featured = DESTINATIONS.slice(0, 6);
+  const featured = nav.destinations.slice(0, 6);
   const testimonials = [
     { quote: "We told them we wanted villas with a view and total privacy — every option they showed us delivered exactly that.", name: "Elena R.", place: "Madrid" },
     { quote: "The Kyoto itinerary balanced guided days with enough free time that it never felt rushed.", name: "Marcus T.", place: "Toronto" },
@@ -847,6 +859,7 @@ function HomeView({ theme, dark, nav }) {
               >
                 <SmartImage
                   photoId={d.img} fallbackQuery={`${d.name},travel`} w={520} h={660}
+                  src={d.uploadedImg}
                   className="absolute inset-0" imgClassName="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   alt={d.name}
                 />
@@ -927,11 +940,13 @@ function AmenityChip({ amenityKey, theme }) {
 }
 
 function PropertyCard({ property, theme, dark, onClick }) {
+  const coverSrc = Array.isArray(property.images) && property.images.length && property.images[0].startsWith("data:") ? property.images[0] : null;
   return (
     <button onClick={onClick} className="group text-left rounded-3xl overflow-hidden flex flex-col focus-visible:outline-amber-500" style={{ boxShadow: dark ? "0 1px 0 rgba(255,255,255,0.06)" : "0 1px 2px rgba(0,0,0,0.04)" }}>
       <div className="relative h-56 overflow-hidden">
         <SmartImage
           photoId={property.images[0]} fallbackQuery={`${property.type},luxury,hotel`} w={640} h={480}
+          src={coverSrc}
           className="absolute inset-0" imgClassName="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           alt={property.name}
         />
@@ -974,7 +989,7 @@ function PropertyCard({ property, theme, dark, onClick }) {
    ============================================================ */
 function BookDestinationsView({ theme, dark, nav }) {
   const [query, setQuery] = useState("");
-  const filtered = DESTINATIONS.filter((d) =>
+  const filtered = nav.destinations.filter((d) =>
     (d.name + " " + d.country).toLowerCase().includes(query.toLowerCase())
   );
 
@@ -1000,14 +1015,14 @@ function BookDestinationsView({ theme, dark, nav }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {filtered.map((d) => {
-            const count = getPropertiesByDestination(d.id).length;
+            const count = nav.getPropertiesByDestinationId(d.id).length;
             return (
               <button
                 key={d.id}
                 onClick={() => nav.selectDestination(d.id)}
                 className="group relative h-72 rounded-3xl overflow-hidden text-left focus-visible:outline-amber-500"
               >
-                <SmartImage photoId={d.img} fallbackQuery={`${d.name},travel`} w={480} h={620} className="absolute inset-0" imgClassName="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt={d.name} />
+                <SmartImage photoId={d.img} fallbackQuery={`${d.name},travel`} w={480} h={620} src={d.uploadedImg} className="absolute inset-0" imgClassName="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt={d.name} />
                 <div className="absolute inset-0 bg-gradient-to-t from-stone-950/92 via-stone-950/25 to-transparent" />
                 <div className="absolute inset-x-4 bottom-4">
                   <h3 className="th-display text-xl text-white mb-0.5">{d.name}</h3>
@@ -1033,15 +1048,15 @@ function BookDestinationsView({ theme, dark, nav }) {
    BOOK FOR YOU — Properties listing
    ============================================================ */
 function BookPropertiesView({ theme, dark, nav }) {
-  const destination = getDestination(nav.selectedDestinationId) || DESTINATIONS[0];
-  const properties = getPropertiesByDestination(destination.id);
+  const destination = nav.getDestinationById(nav.selectedDestinationId) || nav.destinations[0];
+  const properties = nav.getPropertiesByDestinationId(destination.id);
 
   return (
     <main>
       <BackBar label="Back to Destinations" onBack={nav.back} dark={dark} />
 
       <section className="relative h-64 sm:h-80 overflow-hidden">
-        <SmartImage photoId={destination.img} fallbackQuery={`${destination.name},travel`} w={1600} h={900} eager className="absolute inset-0" imgClassName="w-full h-full object-cover" alt={destination.name} />
+        <SmartImage photoId={destination.img} fallbackQuery={`${destination.name},travel`} w={1600} h={900} eager src={destination.uploadedImg} className="absolute inset-0" imgClassName="w-full h-full object-cover" alt={destination.name} />
         <div className="absolute inset-0 bg-gradient-to-t from-stone-950/90 via-stone-950/40 to-stone-950/10" />
         <div className="relative z-10 max-w-7xl mx-auto px-5 sm:px-8 h-full flex flex-col justify-end pb-8">
           <Eyebrow dark>Book For You</Eyebrow>
@@ -1067,11 +1082,11 @@ function BookPropertiesView({ theme, dark, nav }) {
             title="No stays here yet"
             description={`We're still curating hotels and villas in ${destination.name}. In the meantime, our guided tour through the region covers the highlights in full.`}
             action={
-              TOURS.some((t) => t.destinations.some((td) => td.toLowerCase().includes(destination.name.toLowerCase()))) ? (
+              nav.tours.some((t) => t.destinations.some((td) => td.toLowerCase().includes(destination.name.toLowerCase()))) ? (
                 <PrimaryButton
                   className="mt-6"
                   onClick={() => {
-                    const match = TOURS.find((t) => t.destinations.some((td) => td.toLowerCase().includes(destination.name.toLowerCase())));
+                    const match = nav.tours.find((t) => t.destinations.some((td) => td.toLowerCase().includes(destination.name.toLowerCase())));
                     if (match) nav.selectTour(match.id); else nav.goToTours();
                   }}
                   icon={Compass}
@@ -1093,8 +1108,8 @@ function BookPropertiesView({ theme, dark, nav }) {
    BOOK FOR YOU — Property details
    ============================================================ */
 function PropertyDetailView({ theme, dark, nav, openInquiry }) {
-  const property = getProperty(nav.selectedPropertyId) || PROPERTIES[0];
-  const destination = getDestination(property.destinationId);
+  const property = nav.getPropertyById(nav.selectedPropertyId) || nav.properties[0];
+  const destination = nav.getDestinationById(property.destinationId);
   const [activeImg, setActiveImg] = useState(0);
 
   useEffect(() => { setActiveImg(0); }, [property.id]);
@@ -1107,12 +1122,12 @@ function PropertyDetailView({ theme, dark, nav, openInquiry }) {
         {/* Gallery */}
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-3 mb-10">
           <div className="relative h-72 sm:h-[440px] rounded-3xl overflow-hidden">
-            <SmartImage photoId={property.images[activeImg]} fallbackQuery={`${property.type},interior`} w={1100} h={750} eager className="absolute inset-0" imgClassName="w-full h-full object-cover" alt={`${property.name} photo ${activeImg + 1}`} />
+            <SmartImage photoId={property.images[activeImg]} fallbackQuery={`${property.type},interior`} w={1100} h={750} eager src={property.images[activeImg]?.startsWith?.("data:") ? property.images[activeImg] : undefined} className="absolute inset-0" imgClassName="w-full h-full object-cover" alt={`${property.name} photo ${activeImg + 1}`} />
           </div>
           <div className="flex sm:flex-col gap-3 overflow-x-auto sm:overflow-visible th-noscroll">
             {property.images.map((img, i) => (
               <button key={i} onClick={() => setActiveImg(i)} className={cx("relative shrink-0 w-24 h-20 sm:w-full sm:h-[100px] rounded-xl overflow-hidden border-2 transition-colors", i === activeImg ? "border-amber-500" : "border-transparent opacity-80 hover:opacity-100")}>
-                <SmartImage photoId={img} fallbackQuery={property.type} w={220} h={170} className="absolute inset-0" imgClassName="w-full h-full object-cover" alt="" />
+                <SmartImage photoId={img} fallbackQuery={property.type} w={220} h={170} src={img?.startsWith?.("data:") ? img : undefined} className="absolute inset-0" imgClassName="w-full h-full object-cover" alt="" />
               </button>
             ))}
           </div>
@@ -1322,6 +1337,7 @@ function InquiryModal({ state, onClose, dark, theme, onSubmitEnquiry }) {
    TOUR CARD — used in the listing grid
    ============================================================ */
 function TourCard({ tour, theme, dark, onClick }) {
+  const coverSrc = tour.uploadedImg || (tour.img?.startsWith?.("data:") ? tour.img : null);
   return (
     <button
       onClick={onClick}
@@ -1331,6 +1347,7 @@ function TourCard({ tour, theme, dark, onClick }) {
       <div className="relative h-56 overflow-hidden">
         <SmartImage
           photoId={tour.img} fallbackQuery={`travel,tour,adventure`} w={640} h={440}
+          src={coverSrc}
           className="absolute inset-0"
           imgClassName="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           alt={tour.name}
@@ -1390,7 +1407,7 @@ function TourCard({ tour, theme, dark, onClick }) {
    ============================================================ */
 function TourListView({ theme, dark, nav }) {
   const [query, setQuery] = useState("");
-  const filtered = TOURS.filter((t) => {
+  const filtered = nav.tours.filter((t) => {
     const q = query.toLowerCase();
     return (t.name + " " + t.destinations.join(" ")).toLowerCase().includes(q);
   });
@@ -1449,7 +1466,7 @@ function TourListView({ theme, dark, nav }) {
    TOUR FOR YOU — detail view
    ============================================================ */
 function TourDetailView({ theme, dark, nav, openInquiry }) {
-  const tour = getTour(nav.selectedTourId) || TOURS[0];
+  const tour = nav.getTourById(nav.selectedTourId) || nav.tours[0];
   const [activeImg, setActiveImg] = useState(0);
   const [openDay, setOpenDay] = useState(null);
 
@@ -1465,6 +1482,7 @@ function TourDetailView({ theme, dark, nav, openInquiry }) {
           photoId={tour.gallery[activeImg] || tour.img}
           fallbackQuery={`${tour.name},travel`}
           w={1600} h={900} eager
+          src={(() => { const img = tour.gallery[activeImg] || tour.img; return img?.startsWith?.("data:") ? img : tour.uploadedImg || undefined; })()}
           className="absolute inset-0"
           imgClassName="w-full h-full object-cover"
           alt={tour.name}
@@ -1476,7 +1494,7 @@ function TourDetailView({ theme, dark, nav, openInquiry }) {
           {tour.gallery.map((img, i) => (
             <button key={i} onClick={() => setActiveImg(i)}
               className={cx("w-14 h-10 rounded-lg overflow-hidden border-2 transition-colors", i === activeImg ? "border-amber-500" : "border-white/30 opacity-70 hover:opacity-100")}>
-              <SmartImage photoId={img} fallbackQuery="travel" w={120} h={90} className="block" imgClassName="w-full h-full object-cover" alt="" />
+              <SmartImage photoId={img} fallbackQuery="travel" w={120} h={90} src={img?.startsWith?.("data:") ? img : undefined} className="block" imgClassName="w-full h-full object-cover" alt="" />
             </button>
           ))}
         </div>
@@ -1623,14 +1641,14 @@ function TourDetailView({ theme, dark, nav, openInquiry }) {
             <div className="mt-8">
               <h3 className="font-bold text-base mb-4">Other tours you might like</h3>
               <div className="space-y-3">
-                {TOURS.filter((t) => t.id !== tour.id).slice(0, 3).map((t) => (
+                {nav.tours.filter((t) => t.id !== tour.id).slice(0, 3).map((t) => (
                   <button
                     key={t.id}
                     onClick={() => nav.selectTour(t.id)}
                     className={cx("w-full flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors", theme.border, theme.cardHover)}
                   >
                     <div className="relative w-16 h-14 rounded-xl overflow-hidden shrink-0">
-                      <SmartImage photoId={t.img} fallbackQuery="travel" w={120} h={100} className="absolute inset-0" imgClassName="w-full h-full object-cover" alt={t.name} />
+                      <SmartImage photoId={t.img} fallbackQuery="travel" w={120} h={100} src={t.uploadedImg || (t.img?.startsWith?.("data:") ? t.img : undefined)} className="absolute inset-0" imgClassName="w-full h-full object-cover" alt={t.name} />
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-sm truncate">{t.name}</p>
@@ -1856,6 +1874,34 @@ function AdminFormModal({ open, onClose, title, fields, dark, theme, mode, onSav
     if (open) setVals(initialValues || {});
   }, [open, initialValues]);
 
+  const handleFileUpload = (name, files, multiple) => {
+    if (!files?.length) return;
+    const readers = Array.from(files).map((file) => new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    }));
+    Promise.all(readers).then((dataUrls) => {
+      setVals((v) => {
+        if (multiple) {
+          const existing = Array.isArray(v[name]) ? v[name] : [];
+          return { ...v, [name]: [...dataUrls, ...existing] };
+        }
+        return { ...v, [name]: dataUrls[0] };
+      });
+    });
+  };
+
+  const removeImage = (name, index) => {
+    setVals((v) => {
+      const current = v[name];
+      if (Array.isArray(current)) {
+        return { ...v, [name]: current.filter((_, i) => i !== index) };
+      }
+      return { ...v, [name]: null };
+    });
+  };
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -1870,7 +1916,7 @@ function AdminFormModal({ open, onClose, title, fields, dark, theme, mode, onSav
         </button>
         <h2 className="th-display text-2xl mb-6">{title}</h2>
         <div className="space-y-4">
-          {fields.map(({ name, label, type = "text", placeholder }) => (
+          {fields.map(({ name, label, type = "text", placeholder, multiple }) => (
             <div key={name}>
               <label className="text-xs font-semibold block mb-1.5">{label}</label>
               {type === "textarea" ? (
@@ -1881,12 +1927,52 @@ function AdminFormModal({ open, onClose, title, fields, dark, theme, mode, onSav
                   onChange={(e) => setVals((v) => ({ ...v, [name]: e.target.value }))}
                   className={cx("w-full rounded-xl border px-4 py-2.5 text-sm outline-none focus:border-amber-500 resize-none", theme.border, theme.inputBg)}
                 />
-              ) : type === "file" ? (
-                <label className={cx("flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-8 text-sm cursor-pointer transition-colors hover:border-amber-500", theme.border, theme.textMuted)}>
-                  <Upload className="w-6 h-6 opacity-50" />
-                  <span>Click to upload or drag files here</span>
-                  <input type="file" multiple className="sr-only" />
-                </label>
+              ) : type === "imageUpload" ? (
+                <div className="space-y-3">
+                  <label className={cx("flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-6 text-sm cursor-pointer transition-colors hover:border-amber-500", theme.border, theme.textMuted)}>
+                    <Upload className="w-6 h-6 opacity-50" />
+                    <span>{multiple ? "Click to upload images" : "Click to upload an image"}</span>
+                    <input
+                      type="file"
+                      multiple={multiple}
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(e) => {
+                        handleFileUpload(name, e.target.files, multiple);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {vals[name] && (
+                    <div className={cx("flex gap-2 flex-wrap", multiple ? "" : "")}>
+                      {multiple && Array.isArray(vals[name]) ? (
+                        vals[name].map((src, i) => (
+                          <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden shrink-0">
+                            <img src={src} alt="" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => removeImage(name, i)}
+                              style={{ position: "absolute", top: 2, right: 2, zIndex: 10, width: 20, height: 20, borderRadius: "50%", background: "rgba(225,29,72,0.9)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                            >
+                              <X className="text-white" style={{ width: 10, height: 10 }} />
+                            </button>
+                          </div>
+                        ))
+                      ) : typeof vals[name] === "string" ? (
+                        <div className="relative w-24 h-24 rounded-lg overflow-hidden">
+                          <img src={vals[name]} alt="" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(name)}
+                            style={{ position: "absolute", top: 2, right: 2, zIndex: 10, width: 20, height: 20, borderRadius: "50%", background: "rgba(225,29,72,0.9)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                          >
+                            <X className="text-white" style={{ width: 10, height: 10 }} />
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <input
                   type={type}
@@ -1920,16 +2006,16 @@ function AdminFormModal({ open, onClose, title, fields, dark, theme, mode, onSav
 }
 
 
-function AdminDashboard({ theme, dark }) {
+function AdminDashboard({ theme, dark, nav }) {
   return (
     <div className="space-y-8">
       <div>
         <h3 className="font-bold text-base mb-5">Overview</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Destinations" value={DESTINATIONS.length} icon={Globe} change="+1 this month" tone="teal" theme={theme} />
-          <StatCard label="Hotels" value={PROPERTIES.filter((p) => p.type === "Hotel").length} icon={Building2} change="+2 this month" tone="amber" theme={theme} />
-          <StatCard label="Villas" value={PROPERTIES.filter((p) => p.type === "Villa").length} icon={Hotel} change="Unchanged" tone="orange" theme={theme} />
-          <StatCard label="Tour Packages" value={TOURS.length} icon={Compass} change="+1 this month" tone="teal" theme={theme} />
+          <StatCard label="Destinations" value={nav.destinations.length} icon={Globe} change="+1 this month" tone="teal" theme={theme} />
+          <StatCard label="Hotels" value={nav.properties.filter((p) => p.type === "Hotel").length} icon={Building2} change="+2 this month" tone="amber" theme={theme} />
+          <StatCard label="Villas" value={nav.properties.filter((p) => p.type === "Villa").length} icon={Hotel} change="Unchanged" tone="orange" theme={theme} />
+          <StatCard label="Tour Packages" value={nav.tours.length} icon={Compass} change="+1 this month" tone="teal" theme={theme} />
         </div>
       </div>
 
@@ -1937,7 +2023,7 @@ function AdminDashboard({ theme, dark }) {
         <div>
           <h3 className="font-bold text-base mb-4">Recent properties</h3>
           <div className="space-y-3">
-            {PROPERTIES.slice(0, 5).map((p) => (
+            {nav.properties.slice(0, 5).map((p) => (
               <div key={p.id} className={cx("flex items-center gap-3 rounded-xl border px-4 py-3", theme.border)}>
                 <div className="relative w-12 h-10 rounded-lg overflow-hidden shrink-0">
                   <SmartImage photoId={p.images[0]} fallbackQuery={p.type} w={100} h={80} className="absolute inset-0" imgClassName="w-full h-full object-cover" alt={p.name} />
@@ -1954,7 +2040,7 @@ function AdminDashboard({ theme, dark }) {
         <div>
           <h3 className="font-bold text-base mb-4">Recent tours</h3>
           <div className="space-y-3">
-            {TOURS.slice(0, 5).map((t) => (
+            {nav.tours.slice(0, 5).map((t) => (
               <div key={t.id} className={cx("flex items-center gap-3 rounded-xl border px-4 py-3", theme.border)}>
                 <div className="relative w-12 h-10 rounded-lg overflow-hidden shrink-0">
                   <SmartImage photoId={t.img} fallbackQuery="travel" w={100} h={80} className="absolute inset-0" imgClassName="w-full h-full object-cover" alt={t.name} />
@@ -1987,6 +2073,7 @@ function AdminDestinations({ theme, dark, nav }) {
       blurb: editingDest.blurb,
       tag: editingDest.tag,
       img: editingDest.img,
+      uploadedImg: editingDest.uploadedImg || null,
     };
   };
 
@@ -2028,7 +2115,8 @@ function AdminDestinations({ theme, dark, nav }) {
           { name: "country", label: "Country", placeholder: "e.g. Indonesia" },
           { name: "blurb", label: "Short description", type: "textarea", placeholder: "One sentence..." },
           { name: "tag", label: "Tag", placeholder: "e.g. Tropical" },
-          { name: "img", label: "Image ID", placeholder: "Unsplash photo ID" },
+          { name: "uploadedImg", label: "Image", type: "imageUpload" },
+          { name: "img", label: "Or paste Unsplash photo ID", placeholder: "e.g. 1537953773345-d172ccf13cf1" },
         ]}
         onSave={handleSave}
       />
@@ -2057,6 +2145,7 @@ function AdminProperties({ theme, dark, nav }) {
       price: editingProp.priceFrom,
       rating: editingProp.rating,
       reviews: editingProp.reviews,
+      uploadedImages: editingProp.uploadedImages || [],
     };
   };
 
@@ -2116,6 +2205,7 @@ function AdminProperties({ theme, dark, nav }) {
           { name: "location", label: "Location detail", placeholder: "e.g. Seminyak, Bali" },
           { name: "desc", label: "Short description", type: "textarea", placeholder: "One sentence overview..." },
           { name: "longdesc", label: "Full description", type: "textarea", placeholder: "Detailed description..." },
+          { name: "uploadedImages", label: "Property Images", type: "imageUpload", multiple: true },
           { name: "amenities", label: "Amenities (comma-separated)", placeholder: "wifi, pool, breakfast..." },
           { name: "price", label: "Nightly price from (USD)", type: "number", placeholder: "420" },
           { name: "rating", label: "Rating", type: "number", placeholder: "4.8" },
@@ -2146,6 +2236,8 @@ function AdminTours({ theme, dark, nav }) {
       included: editingTour.included.join("\n"),
       excluded: editingTour.excluded.join("\n"),
       price: editingTour.priceFrom,
+      uploadedImg: editingTour.uploadedImg || null,
+      uploadedGallery: editingTour.uploadedGallery || [],
     };
   };
 
@@ -2194,6 +2286,8 @@ function AdminTours({ theme, dark, nav }) {
           { name: "name", label: "Tour name", placeholder: "e.g. Aegean Island Hopper" },
           { name: "duration", label: "Duration", placeholder: "e.g. 7 Days / 6 Nights" },
           { name: "destinations", label: "Destinations (comma-separated)", placeholder: "Athens, Santorini, Mykonos" },
+          { name: "uploadedImg", label: "Cover Image", type: "imageUpload" },
+          { name: "uploadedGallery", label: "Gallery Images", type: "imageUpload", multiple: true },
           { name: "shortdesc", label: "Short description", type: "textarea", placeholder: "One-liner teaser..." },
           { name: "longdesc", label: "Full description", type: "textarea", placeholder: "Full overview..." },
           { name: "highlights", label: "Highlights (one per line)", type: "textarea", placeholder: "Caldera sunset dinner\nAcropolis guided tour..." },
@@ -2276,39 +2370,86 @@ function AdminEnquiries({ theme, dark, enquiries }) {
   );
 }
 
-function AdminMedia({ theme, dark }) {
+function AdminMedia({ theme, dark, nav }) {
 
-  const allImages = [
-    ...PROPERTIES.flatMap((p) => p.images.slice(0, 2)),
-    ...TOURS.map((t) => t.img),
+  const unsplashImages = [
+    ...nav.properties.flatMap((p) => p.images.slice(0, 2)),
+    ...nav.tours.map((t) => t.img),
   ].slice(0, 18);
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className={cx("text-sm", theme.textMuted)}>{allImages.length} assets in library</p>
+        <p className={cx("text-sm", theme.textMuted)}>{unsplashImages.length + nav.mediaImages.length} assets in library</p>
         <label className={cx("inline-flex items-center gap-2 rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-stone-900 cursor-pointer hover:bg-amber-400 transition-colors")}>
           <Upload className="w-4 h-4" /> Upload images
-          <input type="file" multiple className="sr-only" />
+          <input
+            type="file"
+            multiple
+            accept="image/*"
+            className="sr-only"
+            onChange={(e) => {
+              if (e.target.files?.length) nav.addMediaImages(e.target.files);
+              e.target.value = "";
+            }}
+          />
         </label>
       </div>
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-        {allImages.map((img, i) => (
-          <div key={i} className="group relative aspect-square rounded-xl overflow-hidden">
-            <SmartImage photoId={img} fallbackQuery="travel" w={200} h={200} className="absolute inset-0" imgClassName="w-full h-full object-cover" alt="" />
-            <div className="absolute inset-0 bg-stone-950/0 group-hover:bg-stone-950/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-              <div className="flex gap-2">
-                <button className="w-8 h-8 rounded-full bg-white/90 inline-flex items-center justify-center hover:bg-white">
-                  <Eye className="w-3.5 h-3.5 text-stone-800" />
-                </button>
-                <button className="w-8 h-8 rounded-full bg-rose-500/90 inline-flex items-center justify-center hover:bg-rose-500">
-                  <Trash2 className="w-3.5 h-3.5 text-white" />
+
+      {unsplashImages.length > 0 && (
+        <div>
+          <p className={cx("text-xs font-semibold uppercase tracking-wide mb-3", theme.textMuted)}>From properties & tours</p>
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+            {unsplashImages.map((img, i) => (
+              <div key={`unsplash-${i}`} className="rounded-xl overflow-hidden" style={{ position: "relative" }}>
+                <div style={{ position: "relative", width: "100%", paddingTop: "100%" }}>
+                  <SmartImage photoId={img} fallbackQuery="travel" w={200} h={200} className="absolute inset-0" imgClassName="w-full h-full object-cover" alt="" />
+                </div>
+                <button
+                  onClick={() => nav.openLightbox(`https://images.unsplash.com/photo-${img}?w=1200&h=900&q=80&fit=crop&auto=format`)}
+                  style={{ position: "absolute", top: 6, right: 6, zIndex: 20, width: 28, height: 28, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  <Eye className="text-white" style={{ width: 14, height: 14 }} />
                 </button>
               </div>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {nav.mediaImages.length > 0 && (
+        <div>
+          <p className={cx("text-xs font-semibold uppercase tracking-wide mb-3", theme.textMuted)}>Uploaded images</p>
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+            {nav.mediaImages.map((src, i) => (
+              <div key={`upload-${i}`} className="rounded-xl overflow-hidden" style={{ position: "relative" }}>
+                <div style={{ position: "relative", width: "100%", paddingTop: "100%" }}>
+                  <img src={src} alt="" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+                <button
+                  onClick={() => nav.openLightbox(src)}
+                  style={{ position: "absolute", top: 6, right: 40, zIndex: 20, width: 28, height: 28, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  <Eye className="text-white" style={{ width: 14, height: 14 }} />
+                </button>
+                <button
+                  onClick={() => nav.removeMediaImage(i)}
+                  style={{ position: "absolute", top: 6, right: 6, zIndex: 20, width: 28, height: 28, borderRadius: "50%", background: "rgba(225,29,72,0.9)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  <Trash2 className="text-white" style={{ width: 14, height: 14 }} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {unsplashImages.length === 0 && nav.mediaImages.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16">
+          <ImageIcon className="w-10 h-10 opacity-30 mb-3" />
+          <p className={cx("text-sm", theme.textMuted)}>No images yet. Upload some to get started.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -2341,7 +2482,7 @@ function AdminPanel({ nav, dark, setDark, theme, enquiries }) {
 
 
 
-          {section === "media" && <AdminMedia theme={theme} dark={dark} />}
+          {section === "media" && <AdminMedia theme={theme} dark={dark} nav={nav} />}
 
 
         </main>
@@ -2424,9 +2565,15 @@ export default function App() {
     }
   }, [enquiries]);
 
+  const [mediaImages, setMediaImages] = useState(() => loadLs("travel-hub:media", []));
+
+  useEffect(() => {
+    try { localStorage.setItem("travel-hub:media", JSON.stringify(mediaImages)); } catch {}
+  }, [mediaImages]);
+
+  const [lightboxImage, setLightboxImage] = useState(null);
+
   const theme = useThemeTokens(dark);
-  // Used by AdminPanel props
-  const localEnquiries = enquiries;
 
 
 
@@ -2473,6 +2620,7 @@ export default function App() {
     getPropertiesByDestinationId: getPropertiesByDestinationByState,
     getPropertyById: getPropertyByState,
     getTourById: getTourByState,
+    getToursByDestination: (destName) => tours.filter((t) => t.destinations.some((td) => td.toLowerCase().includes(destName.toLowerCase()))),
     openAdminCreate: (entity) => setAdminModal({ open: true, mode: "create", entity, entityId: null }),
     openAdminEdit: (entity, entityId) => setAdminModal({ open: true, mode: "edit", entity, entityId }),
     closeAdminModal: () => setAdminModal((s) => ({ ...s, open: false })),
@@ -2491,6 +2639,7 @@ export default function App() {
             blurb: normalize(values?.blurb) || "",
             img: normalize(values?.img) || "",
             tag: normalize(values?.tag) || "",
+            uploadedImg: values?.uploadedImg || null,
           };
           setDestinations((prev) => [newItem, ...prev]);
         } else {
@@ -2505,6 +2654,7 @@ export default function App() {
                     blurb: normalize(values?.blurb) || d.blurb,
                     tag: normalize(values?.tag) || d.tag,
                     img: normalize(values?.img) || d.img,
+                    uploadedImg: values?.uploadedImg !== undefined ? values.uploadedImg : d.uploadedImg,
                   }
                 : d
             )
@@ -2519,6 +2669,7 @@ export default function App() {
         } else if (mode === "create") {
           const destName = normalize(values.destinationName);
           const dest = destinations.find((d) => d.name === destName);
+          const uploadedImgs = Array.isArray(values.uploadedImages) && values.uploadedImages.length ? values.uploadedImages : [];
           const newItem = {
             id: values.id || `${Date.now()}`,
             destinationId: dest?.id || destinations[0]?.id || "",
@@ -2527,7 +2678,9 @@ export default function App() {
             location: normalize(values.location) || "",
             shortDesc: normalize(values.desc) || "",
             longDesc: normalize(values.longdesc) || "",
-            images: Array.isArray(values.images) && values.images.length ? values.images : values.image ? [values.image] : (values.imgs ? values.imgs : []),
+            images: uploadedImgs.length > 0
+              ? uploadedImgs
+              : Array.isArray(values.images) && values.images.length ? values.images : values.image ? [values.image] : (values.imgs ? values.imgs : []),
             amenities: typeof values.amenities === "string" && values.amenities.trim() ? values.amenities.split(",").map((x) => x.trim()).filter(Boolean) : [],
             rating: Number(values.rating ?? 4.5) || 4.5,
             reviews: Number(values.reviews ?? 0) || 0,
@@ -2539,6 +2692,7 @@ export default function App() {
         } else if (mode === "edit") {
           const destName = normalize(values.destinationName || values.destination);
           const dest = destinations.find((d) => d.name === destName);
+          const uploadedImgs = Array.isArray(values.uploadedImages) ? values.uploadedImages : undefined;
           setProperties((prev) =>
             prev.map((p) =>
               p.id === entityId
@@ -2549,6 +2703,9 @@ export default function App() {
                     location: normalize(values.location) || p.location,
                     shortDesc: normalize(values.desc) || p.shortDesc,
                     longDesc: normalize(values.longdesc) || p.longDesc,
+                    images: uploadedImgs !== undefined
+                      ? (uploadedImgs.length > 0 ? uploadedImgs : p.images)
+                      : p.images,
                     amenities: typeof values.amenities === "string" && values.amenities.trim()
                       ? values.amenities.split(",").map((x) => x.trim()).filter(Boolean)
                       : p.amenities,
@@ -2567,12 +2724,15 @@ export default function App() {
         if (mode === "delete") {
           setTours((prev) => prev.filter((t) => t.id !== entityId));
         } else if (mode === "create") {
+          const uploadedGallery = Array.isArray(values.uploadedGallery) ? values.uploadedGallery : [];
           const newItem = {
             id: values.id || `${Date.now()}`,
             name: normalize(values.name) || "Untitled Tour",
             duration: normalize(values.duration) || "",
-            img: normalize(values.img) || values.image || "",
-            gallery: Array.isArray(values.gallery) && values.gallery.length ? values.gallery : values.img ? [values.img] : [],
+            img: values.uploadedImg || normalize(values.img) || values.image || "",
+            gallery: uploadedGallery.length > 0
+              ? uploadedGallery
+              : Array.isArray(values.gallery) && values.gallery.length ? values.gallery : values.img ? [values.img] : [],
             destinations: typeof values.destinations === "string" ? values.destinations.split(",").map((x) => x.trim()).filter(Boolean) : (values.destinationList || []),
             shortDesc: normalize(values.shortdesc) || normalize(values.shortDesc) || "",
             longDesc: normalize(values.longdesc) || normalize(values.longdescFull) || "",
@@ -2583,9 +2743,12 @@ export default function App() {
             itinerary: Array.isArray(values.itinerary) ? values.itinerary : [],
             included: typeof values.included === "string" ? values.included.split("\n").map((x) => x.trim()).filter(Boolean) : [],
             excluded: typeof values.excluded === "string" ? values.excluded.split("\n").map((x) => x.trim()).filter(Boolean) : [],
+            uploadedImg: values.uploadedImg || null,
+            uploadedGallery: uploadedGallery,
           };
           setTours((prev) => [newItem, ...prev]);
         } else if (mode === "edit") {
+          const uploadedGallery = Array.isArray(values.uploadedGallery) ? values.uploadedGallery : undefined;
           setTours((prev) =>
             prev.map((t) =>
               t.id === entityId
@@ -2610,6 +2773,12 @@ export default function App() {
                     excluded: typeof values.excluded === "string"
                       ? values.excluded.split("\n").map((x) => x.trim()).filter(Boolean)
                       : t.excluded,
+                    img: values.uploadedImg || normalize(values.img) || t.img,
+                    gallery: uploadedGallery !== undefined
+                      ? (uploadedGallery.length > 0 ? uploadedGallery : t.gallery)
+                      : t.gallery,
+                    uploadedImg: values.uploadedImg !== undefined ? values.uploadedImg : t.uploadedImg,
+                    uploadedGallery: uploadedGallery !== undefined ? uploadedGallery : t.uploadedGallery,
                   }
                 : t
             )
@@ -2620,10 +2789,40 @@ export default function App() {
       setAdminModal((s) => ({ ...s, open: false }));
       setAdminFormKey((k) => k + 1);
     },
+    mediaImages,
+    addMediaImages: (files) => {
+      const readers = Array.from(files).map((file) => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      }));
+      Promise.all(readers).then((dataUrls) => {
+        setMediaImages((prev) => [...dataUrls, ...prev]);
+      });
+    },
+    removeMediaImage: (index) => {
+      setMediaImages((prev) => prev.filter((_, i) => i !== index));
+    },
+    lightboxImage,
+    openLightbox: (src) => setLightboxImage(src),
+    closeLightbox: () => setLightboxImage(null),
   };
 
 
-  if (view === "admin") return <AdminPanel nav={nav} dark={dark} setDark={setDark} theme={theme} enquiries={enquiries} />;
+  if (view === "admin") return (
+    <>
+      <AdminPanel nav={nav} dark={dark} setDark={setDark} theme={theme} enquiries={enquiries} />
+      {lightboxImage && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={nav.closeLightbox}>
+          <div className="absolute inset-0 bg-stone-950/80 backdrop-blur-sm" />
+          <img src={lightboxImage} alt="Preview" className="relative max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl" />
+          <button onClick={nav.closeLightbox} className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm inline-flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+    </>
+  );
 
 
   return (

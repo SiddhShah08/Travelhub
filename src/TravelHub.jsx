@@ -448,12 +448,7 @@ function saveLs(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    localStorage.removeItem(key);
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      window.__travelHubStorageError = (window.__travelHubStorageError || 0) + 1;
-    }
+    console.warn(`localStorage save failed for key "${key}" — data may not persist after refresh.`);
   }
 }
 
@@ -2542,17 +2537,9 @@ export default function App() {
   const [properties, setProperties] = useState(() => loadLs("travel-hub:properties", PROPERTIES));
   const [tours, setTours] = useState(() => loadLs("travel-hub:tours", TOURS));
 
-  useEffect(() => {
-    saveLs("travel-hub:destinations", destinations);
-  }, [destinations]);
-
-  useEffect(() => {
-    saveLs("travel-hub:properties", properties);
-  }, [properties]);
-
-  useEffect(() => {
-    saveLs("travel-hub:tours", tours);
-  }, [tours]);
+  useEffect(() => { saveLs("travel-hub:destinations", destinations); }, [destinations]);
+  useEffect(() => { saveLs("travel-hub:properties", properties); }, [properties]);
+  useEffect(() => { saveLs("travel-hub:tours", tours); }, [tours]);
 
   // Data getters re-bound to state
   const getDestinationByState = (id) => destinations.find((d) => d.id === id);

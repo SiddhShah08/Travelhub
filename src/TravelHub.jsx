@@ -973,7 +973,7 @@ function PropertyCard({ property, theme, dark, onClick }) {
         <div className={cx("mt-auto pt-4 border-t flex items-center justify-between", theme.border)}>
           <div>
             <span className={cx("text-xs", theme.textFaint)}>From</span>
-            <p className="font-bold text-lg leading-none mt-0.5">${property.priceFrom}<span className={cx("text-xs font-normal", theme.textMuted)}> / night</span></p>
+            <p className="font-bold text-lg leading-none mt-0.5">₹{property.priceFrom}<span className={cx("text-xs font-normal", theme.textMuted)}> / night</span></p>
           </div>
           <span className="inline-flex items-center gap-1 text-sm font-semibold text-amber-600 group-hover:gap-2 transition-all">
             View details <ArrowRight className="w-4 h-4" />
@@ -1216,7 +1216,7 @@ function PropertyDetailView({ theme, dark, nav, openInquiry }) {
                 <span className={cx("text-xs", theme.textFaint)}>From</span>
                 <RatingStars rating={property.rating} />
               </div>
-              <p className="font-bold text-3xl th-display mb-1">${property.priceFrom}<span className={cx("text-sm font-normal", theme.textMuted)}> / night</span></p>
+              <p className="font-bold text-3xl th-display mb-1">₹{property.priceFrom}<span className={cx("text-sm font-normal", theme.textMuted)}> / night</span></p>
               <p className={cx("text-xs mb-6", theme.textFaint)}>Showcase pricing — no payment is collected.</p>
               <PrimaryButton className="w-full mb-3" icon={Send} onClick={() => openInquiry("property", property)}>Enquire Now</PrimaryButton>
               <p className={cx("text-xs text-center", theme.textFaint)}>A concierge replies within one business day.</p>
@@ -1389,7 +1389,7 @@ function TourCard({ tour, theme, dark, onClick }) {
           <div>
             <span className={cx("text-xs", theme.textFaint)}>From</span>
             <p className="font-bold text-lg leading-none mt-0.5">
-              ${tour.priceFrom.toLocaleString()}
+              ₹{tour.priceFrom.toLocaleString()}
               <span className={cx("text-xs font-normal", theme.textMuted)}> / person</span>
             </p>
           </div>
@@ -1611,7 +1611,7 @@ function TourDetailView({ theme, dark, nav, openInquiry }) {
                 <RatingStars rating={tour.rating} />
               </div>
               <p className="font-bold text-3xl th-display mb-1">
-                ${tour.priceFrom.toLocaleString()}
+                ₹{tour.priceFrom.toLocaleString()}
                 <span className={cx("text-sm font-normal", theme.textMuted)}> / person</span>
               </p>
               <p className={cx("text-xs mb-6", theme.textFaint)}>Showcase pricing — no payment is collected.</p>
@@ -2049,7 +2049,7 @@ function AdminDashboard({ theme, dark, nav }) {
                   <p className="font-semibold text-sm truncate">{t.name}</p>
                   <p className={cx("text-xs truncate", theme.textMuted)}>{t.duration}</p>
                 </div>
-                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-orange-500/15 text-orange-600 shrink-0">${t.priceFrom.toLocaleString()}</span>
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-orange-500/15 text-orange-600 shrink-0">₹{t.priceFrom.toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -2207,7 +2207,7 @@ function AdminProperties({ theme, dark, nav }) {
           { name: "longdesc", label: "Full description", type: "textarea", placeholder: "Detailed description..." },
           { name: "uploadedImages", label: "Property Images", type: "imageUpload", multiple: true },
           { name: "amenities", label: "Amenities (comma-separated)", placeholder: "wifi, pool, breakfast..." },
-          { name: "price", label: "Nightly price from (USD)", type: "number", placeholder: "420" },
+          { name: "price", label: "Nightly price from (₹ INR)", type: "number", placeholder: "420" },
           { name: "rating", label: "Rating", type: "number", placeholder: "4.8" },
           { name: "reviews", label: "Reviews", type: "number", placeholder: "200" },
         ]}
@@ -2293,7 +2293,7 @@ function AdminTours({ theme, dark, nav }) {
           { name: "highlights", label: "Highlights (one per line)", type: "textarea", placeholder: "Caldera sunset dinner\nAcropolis guided tour..." },
           { name: "included", label: "Included (one per line)", type: "textarea", placeholder: "Daily breakfast\nAirport transfers..." },
           { name: "excluded", label: "Not included (one per line)", type: "textarea", placeholder: "International flights\nTravel insurance..." },
-          { name: "price", label: "Price per person from (USD)", type: "number", placeholder: "1490" },
+          { name: "price", label: "Price per person from (₹ INR)", type: "number", placeholder: "1490" },
         ]}
         onSave={handleSave}
       />

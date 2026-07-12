@@ -423,6 +423,40 @@ function unsplashUrl(id, w, h) {
   return `https://images.unsplash.com/photo-${id}?w=${w}&h=${h}&q=80&fit=crop&auto=format`;
 }
 
+function compressImage(file, maxW = 1200, quality = 0.7) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w = img.width;
+        let h = img.height;
+        if (w > maxW) { h = Math.round(h * (maxW / w)); w = maxW; }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function saveLs(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    localStorage.removeItem(key);
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      window.__travelHubStorageError = (window.__travelHubStorageError || 0) + 1;
+    }
+  }
+}
+
 function SmartImage({ photoId, fallbackQuery, w = 800, h = 600, alt = "", className = "", imgClassName = "", eager = false, src: directSrc }) {
   const [stage, setStage] = useState(0);
 
@@ -1876,11 +1910,7 @@ function AdminFormModal({ open, onClose, title, fields, dark, theme, mode, onSav
 
   const handleFileUpload = (name, files, multiple) => {
     if (!files?.length) return;
-    const readers = Array.from(files).map((file) => new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.readAsDataURL(file);
-    }));
+    const readers = Array.from(files).map((file) => compressImage(file));
     Promise.all(readers).then((dataUrls) => {
       setVals((v) => {
         if (multiple) {
@@ -2513,15 +2543,15 @@ export default function App() {
   const [tours, setTours] = useState(() => loadLs("travel-hub:tours", TOURS));
 
   useEffect(() => {
-    try { localStorage.setItem("travel-hub:destinations", JSON.stringify(destinations)); } catch {}
+    saveLs("travel-hub:destinations", destinations);
   }, [destinations]);
 
   useEffect(() => {
-    try { localStorage.setItem("travel-hub:properties", JSON.stringify(properties)); } catch {}
+    saveLs("travel-hub:properties", properties);
   }, [properties]);
 
   useEffect(() => {
-    try { localStorage.setItem("travel-hub:tours", JSON.stringify(tours)); } catch {}
+    saveLs("travel-hub:tours", tours);
   }, [tours]);
 
   // Data getters re-bound to state
@@ -2558,17 +2588,13 @@ export default function App() {
   });
 
   useEffect(() => {
-    try {
-      localStorage.setItem("travel-hub:enquiries", JSON.stringify(enquiries));
-    } catch {
-      // ignore quota / private mode errors
-    }
+    saveLs("travel-hub:enquiries", enquiries);
   }, [enquiries]);
 
   const [mediaImages, setMediaImages] = useState(() => loadLs("travel-hub:media", []));
 
   useEffect(() => {
-    try { localStorage.setItem("travel-hub:media", JSON.stringify(mediaImages)); } catch {}
+    saveLs("travel-hub:media", mediaImages);
   }, [mediaImages]);
 
   const [lightboxImage, setLightboxImage] = useState(null);
@@ -2791,11 +2817,7 @@ export default function App() {
     },
     mediaImages,
     addMediaImages: (files) => {
-      const readers = Array.from(files).map((file) => new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.readAsDataURL(file);
-      }));
+      const readers = Array.from(files).map((file) => compressImage(file));
       Promise.all(readers).then((dataUrls) => {
         setMediaImages((prev) => [...dataUrls, ...prev]);
       });
